@@ -71,6 +71,11 @@ DesysFlow writes versioned artifacts to `./desysflow/<project>/vN/` including:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Author
+
+- X: [@kmeanskaran](https://x.com/kmeanskaran)
+- Website: [kmeanskaran.com](https://kmeanskaran.com)
+
 ## Code of Conduct
 
 See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
