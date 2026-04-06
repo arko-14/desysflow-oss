@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$ROOT_DIR"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./letsvibedesign
+  ./letsvibedesign setup
+  ./letsvibedesign cli
+  ./letsvibedesign dev
+  ./letsvibedesign api
+  ./letsvibedesign ui
+  ./letsvibedesign check
+
+Modes:
+  setup   First-run installation and model setup
+  cli     Launch terminal-first DesysFlow CLI
+  dev     Launch backend + UI
+  api     Launch backend only
+  ui      Launch UI only
+  check   Check selected model availability
+EOF
+}
+
+ensure_bootstrap() {
+  if [ ! -f ".env" ] || [ ! -d ".venv" ] || [ ! -d "ui/node_modules" ]; then
+    echo "First-time setup required."
+    ./scripts/bootstrap.sh
+  fi
+}
+
+pick_mode() {
+  printf "Start mode [cli/dev/api/ui/check] (default: cli): "
+  read -r mode
+  echo "${mode:-cli}"
+}
+
+run_mode() {
+  local mode="$1"
+  case "$mode" in
+    setup)
+      ./scripts/bootstrap.sh
+      ;;
+    cli)
+      ensure_bootstrap
+      exec uv run desysflow
+      ;;
+    dev)
+      ensure_bootstrap
+      exec ./scripts/dev.sh
+      ;;
+    api)
+      ensure_bootstrap
+      exec ./scripts/api.sh
+      ;;
+    ui)
+      ensure_bootstrap
+      exec ./scripts/ui.sh
+      ;;
+    check)
+      ensure_bootstrap
+      exec uv run python scripts/check_model.py
+      ;;
+    help|-h|--help)
+      usage
+      ;;
+    *)
+      echo "Unknown mode: $mode"
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+MODE="${1:-}"
+if [ -z "$MODE" ]; then
+  ensure_bootstrap
+  MODE="$(pick_mode)"
+fi
+
+run_mode "$MODE"
