@@ -35,8 +35,8 @@ For the agent-by-agent view, see [Agentic Architecture](agentic-architecture.md)
 - Follow-up flow (`/design/followup`, `/design/followup/async`)
   - merges session memory context
   - preserves diagram stability via Mermaid diff/stabilization
-- Critic loop (`/design/critic`)
-  - runs judge findings
+- Integrated critic/revision loop in the main workflow
+  - generates critic findings
   - applies reviser updates
   - regenerates diagram/report/cloud outputs
 - Cloud redesign (`/design/cloud-redesign`)

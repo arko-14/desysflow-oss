@@ -294,30 +294,6 @@ class FollowUpResponse(BaseModel):
     execution_mode: str = Field(default="full")
 
 
-class DesignCriticRequest(BaseModel):
-    """POST /design/critic request body."""
-    session_id: str = Field(..., description="Session id returned by POST /design")
-    focus: str = Field(
-        default="",
-        description="Optional review focus, e.g. security hardening or cost optimization",
-    )
-    search_mode: str = Field(
-        default="on",
-        description="Web search mode for critic grounding: on | off",
-    )
-
-
-class DesignCriticResponse(BaseModel):
-    """POST /design/critic response body."""
-    session_id: str
-    critic_feedback: List[str] = Field(default_factory=list)
-    critic_summary: Dict[str, Any] = Field(default_factory=dict)
-    suggested_improvements: List[str] = Field(default_factory=list)
-    overall_verdict: str = Field(default="major_rework_required")
-    risk_score: int = Field(default=70)
-    reasoning_summary: str = Field(default="")
-
-
 class ConversationListItem(BaseModel):
     """Conversation entry for sidebar listing."""
 

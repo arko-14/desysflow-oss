@@ -26,10 +26,11 @@ DESIGN_NODE_TO_STAGE = {
     "select_template": "extract",
     "generate_architecture": "draft",
     "inject_edge_cases": "draft",
-    "select_primary_architecture": "draft",
-    "diagram_generator": "draft",
+    "critic_agent": "review",
+    "revision_agent": "review",
+    "diagram_generator": "review",
     "diagram_quality_agent": "review",
-    "report_generator": "review",
+    "report_generator": "package",
     "cloud_infra_agent": "package",
 }
 
@@ -38,10 +39,11 @@ FOLLOWUP_NODE_TO_STAGE = {
     "select_template": "update",
     "generate_architecture": "draft",
     "inject_edge_cases": "draft",
-    "select_primary_architecture": "draft",
-    "diagram_generator": "draft",
+    "critic_agent": "review",
+    "revision_agent": "review",
+    "diagram_generator": "review",
     "diagram_quality_agent": "review",
-    "report_generator": "review",
+    "report_generator": "package",
     "cloud_infra_agent": "package",
 }
 

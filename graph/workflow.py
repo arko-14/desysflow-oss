@@ -10,10 +10,12 @@ from typing import Any, Callable, Dict
 from langgraph.graph import END, StateGraph
 
 from agents.cloud_infra import cloud_infra_agent
+from agents.critic import critic_agent
 from agents.diagram import diagram_generator
 from agents.diagram_quality import diagram_quality_agent
 from agents.extractor import extract_requirements
 from agents.generator import generate_architecture
+from agents.reviser import revision_agent
 from agents.report_generator import report_generator
 from rules.edge_cases import inject_edge_cases as _inject_edge_cases
 from schemas.models import AgentState, Requirements
@@ -43,17 +45,6 @@ def _inject_edge_cases_node(state: AgentState) -> Dict[str, Any]:
     return {"edge_cases": edge_cases}
 
 
-def _select_primary_architecture_node(state: AgentState) -> Dict[str, Any]:
-    """LangGraph node — choose base architecture without critic revision."""
-    architectures = state.get("architectures", [])
-    revised = architectures[0] if architectures else {}
-    return {"revised_architecture": revised}
-
-
-# ---------------------------------------------------------------------------
-# Graph construction
-# ---------------------------------------------------------------------------
-
 def build_graph() -> StateGraph:
     """Construct and return the compiled LangGraph StateGraph."""
     graph = StateGraph(AgentState)
@@ -63,7 +54,8 @@ def build_graph() -> StateGraph:
     graph.add_node("select_template", _select_template_node)
     graph.add_node("generate_architecture", generate_architecture)
     graph.add_node("inject_edge_cases", _inject_edge_cases_node)
-    graph.add_node("select_primary_architecture", _select_primary_architecture_node)
+    graph.add_node("critic_agent", critic_agent)
+    graph.add_node("revision_agent", revision_agent)
     graph.add_node("diagram_generator", diagram_generator)
     graph.add_node("diagram_quality_agent", diagram_quality_agent)
     graph.add_node("report_generator", report_generator)
@@ -74,8 +66,9 @@ def build_graph() -> StateGraph:
     graph.add_edge("extract_requirements", "select_template")
     graph.add_edge("select_template", "generate_architecture")
     graph.add_edge("generate_architecture", "inject_edge_cases")
-    graph.add_edge("inject_edge_cases", "select_primary_architecture")
-    graph.add_edge("select_primary_architecture", "diagram_generator")
+    graph.add_edge("inject_edge_cases", "critic_agent")
+    graph.add_edge("critic_agent", "revision_agent")
+    graph.add_edge("revision_agent", "diagram_generator")
     graph.add_edge("diagram_generator", "diagram_quality_agent")
     graph.add_edge("diagram_quality_agent", "report_generator")
     graph.add_edge("report_generator", "cloud_infra_agent")

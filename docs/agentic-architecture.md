@@ -36,7 +36,7 @@ The API wraps the base graph with product workflows used by the UI:
 
 - Async progress: `/design/async`, `/design/followup/async`, and `/operations/{operation_id}` expose running state to the UI.
 - Follow-up refinement: `/design/followup` and `/design/followup/async` use session memory and stabilize Mermaid diagrams across iterations.
-- Critic loop: `/design/critic` runs a judge/reviser pass and regenerates revised outputs.
+- Critic loop: built into the main workflow via `critic_agent` and `revision_agent` before diagram/report generation.
 - Cloud redesign: `/design/cloud-redesign` remaps the latest design to a selected cloud provider.
 
 ## Persistence

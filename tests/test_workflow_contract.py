@@ -1,6 +1,8 @@
 import pytest
 
 from utils.workflow_contract import (
+    DESIGN_NODE_TO_STAGE,
+    FOLLOWUP_NODE_TO_STAGE,
     normalize_workflow_result,
     validate_delivery_payload,
     validate_workflow_result,
@@ -102,3 +104,10 @@ def test_normalize_workflow_result_backfills_required_hld_fields() -> None:
     assert normalized["hld_report"]["estimated_capacity"]
 
     validate_workflow_result(normalized)
+
+
+def test_progress_maps_include_integrated_critic_and_revision_nodes() -> None:
+    assert DESIGN_NODE_TO_STAGE["critic_agent"] == "review"
+    assert DESIGN_NODE_TO_STAGE["revision_agent"] == "review"
+    assert FOLLOWUP_NODE_TO_STAGE["critic_agent"] == "review"
+    assert FOLLOWUP_NODE_TO_STAGE["revision_agent"] == "review"

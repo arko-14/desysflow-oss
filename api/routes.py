@@ -18,22 +18,14 @@ from typing import Any, Dict
 from fastapi import APIRouter, HTTPException
 
 from agents.critic import run_critic_standalone
-from agents.critic_judge import run_design_judge
 from agents.diagram import generate_cloud_diagram
-from agents.diagram import diagram_generator
-from agents.diagram_quality import diagram_quality_agent
-from agents.reviser import revision_agent
 from agents.report_generator import generate_cloud_reports
-from agents.report_generator import report_generator
-from agents.cloud_infra import cloud_infra_agent
 from graph.workflow import run_workflow, run_workflow_with_updates
 from schemas.models import (
     ConversationDetailResponse,
     ConversationListResponse,
     CloudRedesignRequest,
     CloudRedesignResponse,
-    DesignCriticRequest,
-    DesignCriticResponse,
     DesignRequest,
     DesignResponse,
     FollowUpRequest,
@@ -64,7 +56,6 @@ from utils.session_memory import (
     init_session_memory,
     init_session_state,
     mark_session_status,
-    memory_to_markdown,
     record_error_and_correction,
     update_memory_after_run,
     write_session_note,
@@ -87,17 +78,6 @@ _OPERATIONS: Dict[str, Dict[str, Any]] = {}
 _OPERATIONS_LOCK = threading.Lock()
 _MAX_OPERATION_HISTORY = 200
 
-
-def _env_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, str(default)))
-    except Exception:
-        return default
-
-
-_CRITIC_MAX_RUNS_PER_SESSION = _env_int("CRITIC_MAX_RUNS_PER_SESSION", 3)
-_CRITIC_ITERATION_LIMIT = _env_int("CRITIC_ITERATION_LIMIT", 3)
-_CRITIC_PASS_MAX_RISK = _env_int("CRITIC_PASS_MAX_RISK", 45)
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -274,19 +254,6 @@ def _conversation_title(text: str) -> str:
     return cleaned[:60]
 
 
-def _build_design_markdown(session: Dict[str, Any], latest_result: Dict[str, Any], design_doc: Dict[str, Any]) -> str:
-    title = _conversation_title(str(session.get("initial_input", "Architecture Design")))
-    summary = latest_result.get("hld_report", {}).get("system_overview", "")
-    return (
-        f"# {title}\n\n"
-        f"## Summary\n{summary or 'No summary available.'}\n\n"
-        "## Design Document\n"
-        f"{json.dumps(design_doc, indent=2)}\n\n"
-        "## Latest Result\n"
-        f"{json.dumps(latest_result, indent=2)}"
-    )
-
-
 def _persist_conversation(session_id: str, payload: Dict[str, Any]) -> None:
     initial_input = str(payload.get("initial_input", "")).strip()
     title = _conversation_title(initial_input)
@@ -320,59 +287,6 @@ async def _run_postprocessors(result: Dict[str, Any]) -> tuple[Dict[str, Any], D
         asyncio.to_thread(build_non_technical_doc, result),
     )
     return critic_summary, system_design_doc, non_technical_doc
-
-
-def _critic_passed(judge_output: Dict[str, Any]) -> bool:
-    verdict = str(judge_output.get("overall_verdict", "")).strip()
-    try:
-        risk = int(judge_output.get("risk_score", 100))
-    except Exception:
-        risk = 100
-    findings = judge_output.get("findings", [])
-    critical_count = 0
-    if isinstance(findings, list):
-        for item in findings:
-            if isinstance(item, dict) and str(item.get("severity", "")).lower() == "critical":
-                critical_count += 1
-    return (
-        verdict == "approve_with_changes"
-        and risk <= _CRITIC_PASS_MAX_RISK
-        and critical_count == 0
-    )
-
-
-def _build_reviser_state(
-    session: Dict[str, Any],
-    latest_result: Dict[str, Any],
-    critic_feedback: list[str],
-) -> Dict[str, Any]:
-    requirements = latest_result.get("requirements", {}) or {}
-    architectures = latest_result.get("architectures", []) or []
-    revised = latest_result.get("revised_architecture", {}) or {}
-    if revised:
-        if architectures:
-            architectures = [revised, *architectures[1:]]
-        else:
-            architectures = [revised]
-
-    return {
-        "user_input": str(session.get("initial_input", "")),
-        "diagram_style": str(session.get("diagram_style", "balanced")),
-        "preferred_language": str(session.get("preferred_language", "Python")),
-        "requirements": requirements,
-        "template": str(latest_result.get("template", "")),
-        "architectures": architectures,
-        "edge_cases": latest_result.get("edge_cases", []) or [],
-        "critic_feedback": critic_feedback,
-        "revised_architecture": revised,
-        "mermaid_code": str(latest_result.get("mermaid_code", "")),
-        "excalidraw_diagram": latest_result.get("excalidraw_diagram", {}) or {},
-        "diagram_quality_checks": latest_result.get("diagram_quality_checks", []) or [],
-        "hld_report": latest_result.get("hld_report", {}) or {},
-        "lld_report": latest_result.get("lld_report", {}) or {},
-        "tech_stack": latest_result.get("tech_stack", {}) or {},
-        "cloud_infrastructure": latest_result.get("cloud_infrastructure", {}) or {},
-    }
 
 
 def _append_workspace_preferences(
@@ -516,8 +430,6 @@ async def _run_design_async_operation(
             "scope",
         )
         result.setdefault("requirements", {})["preferred_language"] = preferred_language
-        result.setdefault("critic_run_limit", _CRITIC_MAX_RUNS_PER_SESSION)
-        result.setdefault("critic_runs_used", 0)
         result["diagram_style"] = diagram_style
         result = _attach_mermaid_metadata(result, source="design_async")
         result = normalize_workflow_result(result)
@@ -547,7 +459,6 @@ async def _run_design_async_operation(
             "preferred_language": preferred_language,
             "chat_history": chat_history,
             "latest_result": result,
-            "critic_runs": 0,
             "memory": session_memory,
             "state": session_state,
         }
@@ -626,8 +537,6 @@ async def _run_followup_async_operation(
                 message,
             )
         result.setdefault("requirements", {})["preferred_language"] = preferred_language
-        result.setdefault("critic_run_limit", _CRITIC_MAX_RUNS_PER_SESSION)
-        result.setdefault("critic_runs_used", int(session.get("critic_runs", 0)))
         result["diagram_style"] = diagram_style
         result = _attach_mermaid_metadata(result, source="followup_async", previous_result=previous_result)
         result = normalize_workflow_result(result)
@@ -834,8 +743,6 @@ async def design_system(request: DesignRequest) -> DesignResponse:
         # Run blocking workflow in a thread to avoid blocking the event loop
         result = await asyncio.to_thread(run_workflow, user_input, diagram_style, preferred_language)
         result.setdefault("requirements", {})["preferred_language"] = preferred_language
-        result.setdefault("critic_run_limit", _CRITIC_MAX_RUNS_PER_SESSION)
-        result.setdefault("critic_runs_used", 0)
         result["diagram_style"] = diagram_style
         result = _attach_mermaid_metadata(result, source="design")
         result = normalize_workflow_result(result)
@@ -865,7 +772,6 @@ async def design_system(request: DesignRequest) -> DesignResponse:
             "preferred_language": preferred_language,
             "chat_history": chat_history,
             "latest_result": result,
-            "critic_runs": 0,
             "memory": session_memory,
             "state": session_state,
         }
@@ -901,157 +807,6 @@ async def design_system(request: DesignRequest) -> DesignResponse:
         )
     finally:
         clear_request_model_override()
-
-
-@router.post("/design/critic", response_model=DesignCriticResponse)
-async def run_design_critic(request: DesignCriticRequest) -> DesignCriticResponse:
-    """Run premium/limited on-demand critic loop (judge + revise) for an existing session."""
-    session = _ensure_live_session(request.session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found. Start with POST /design.")
-
-    current_runs = int(session.get("critic_runs", 0))
-    if _CRITIC_MAX_RUNS_PER_SESSION > 0 and current_runs >= _CRITIC_MAX_RUNS_PER_SESSION:
-        raise HTTPException(
-            status_code=429,
-            detail=(
-                "Critic premium limit reached for this session. "
-                "Upgrade plan or start a new session for additional critic runs."
-            ),
-        )
-
-    latest_result = dict(session.get("latest_result", {}) or {})
-    session_memory = session.get("memory", {}) or {}
-    memory_summary = memory_to_markdown(session_memory)
-    if len(memory_summary) > 1800:
-        memory_summary = f"{memory_summary[:1800]}..."
-    working_latest = dict(latest_result)
-    iteration_limit = max(1, _CRITIC_ITERATION_LIMIT)
-    iterations_used = 0
-    judge_output: Dict[str, Any] = {}
-
-    for idx in range(iteration_limit):
-        iterations_used = idx + 1
-        design_doc = build_system_design_doc(working_latest)
-        markdown_payload = _build_design_markdown(session, working_latest, design_doc)
-        if memory_summary.strip():
-            markdown_payload = f"{markdown_payload}\n\n## Session Memory Summary\n{memory_summary}"
-        payload = {
-            "system_design_markdown": markdown_payload,
-            "chat_history": session.get("chat_history", []),
-            "focus": request.focus,
-        }
-        judge_output = await asyncio.to_thread(run_design_judge, payload, request.focus, request.search_mode)
-        findings = judge_output.get("findings", [])
-        critic_feedback = [str(item.get("text", "")) for item in findings if isinstance(item, dict)]
-
-        if _critic_passed(judge_output) or idx == iteration_limit - 1:
-            break
-
-        revised = await asyncio.to_thread(
-            revision_agent,
-            _build_reviser_state(session, working_latest, critic_feedback),
-        )
-        revised_architecture = revised.get("revised_architecture", {})
-        if isinstance(revised_architecture, dict) and revised_architecture:
-            working_latest["revised_architecture"] = revised_architecture
-            architectures = working_latest.get("architectures", []) or []
-            if architectures:
-                working_latest["architectures"] = [revised_architecture, *architectures[1:]]
-            else:
-                working_latest["architectures"] = [revised_architecture]
-
-    final_findings = judge_output.get("findings", [])
-    critic_feedback = [str(item.get("text", "")) for item in final_findings if isinstance(item, dict)]
-    critic_summary = build_critic_summary(critic_feedback)
-
-    # Preserve judge-provided categories/severity for richer UI.
-    if isinstance(critic_summary.get("items"), list):
-        for idx, item in enumerate(critic_summary["items"]):
-            if idx < len(final_findings) and isinstance(final_findings[idx], dict):
-                if "severity" in final_findings[idx]:
-                    item["severity"] = str(final_findings[idx]["severity"])
-                if "category" in final_findings[idx]:
-                    item["category"] = str(final_findings[idx]["category"])
-        # Recompute counts after applying judge-provided severity/category.
-        severity_counts = {"critical": 0, "warning": 0, "info": 0}
-        category_counts: dict[str, int] = {}
-        for item in critic_summary["items"]:
-            severity = str(item.get("severity", "info")).lower()
-            if severity not in severity_counts:
-                severity = "info"
-            category = str(item.get("category", "general")).lower() or "general"
-            severity_counts[severity] += 1
-            category_counts[category] = category_counts.get(category, 0) + 1
-        critic_summary["counts"] = {
-            "severity": severity_counts,
-            "category": category_counts,
-            "total": len(critic_summary["items"]),
-        }
-
-    # Regenerate artifacts from revised architecture after the critic loop.
-    regen_state = _build_reviser_state(session, working_latest, critic_feedback)
-    diagram_out, report_out, cloud_out = await asyncio.gather(
-        asyncio.to_thread(diagram_generator, regen_state),
-        asyncio.to_thread(report_generator, regen_state),
-        asyncio.to_thread(cloud_infra_agent, regen_state),
-    )
-    quality_state = {**regen_state, **(diagram_out or {})}
-    quality_out = await asyncio.to_thread(diagram_quality_agent, quality_state)
-    working_latest.update(diagram_out or {})
-    working_latest.update(quality_out or {})
-    working_latest.update(report_out or {})
-    working_latest.update(cloud_out or {})
-    working_latest["diagram_style"] = str(session.get("diagram_style", "balanced"))
-    working_latest = _attach_mermaid_metadata(
-        working_latest,
-        source="critic_loop",
-        previous_result=latest_result,
-    )
-    working_latest["system_design_doc"] = build_system_design_doc(working_latest)
-
-    updated_latest = {
-        **working_latest,
-        "critic_feedback": critic_feedback,
-        "critic_summary": critic_summary,
-        "critic_suggested_improvements": judge_output.get("suggested_improvements", [])[:12],
-        "critic_verdict": judge_output.get("overall_verdict", "major_rework_required"),
-        "critic_risk_score": int(judge_output.get("risk_score", 70)),
-        "critic_reasoning_summary": judge_output.get("reasoning_summary", ""),
-        "critic_iterations_used": iterations_used,
-        "critic_iteration_limit": iteration_limit,
-        "critic_run_limit": _CRITIC_MAX_RUNS_PER_SESSION,
-        "critic_runs_used": current_runs + 1,
-    }
-    updated_history = list(session.get("chat_history", []))
-    focus = (request.focus or "").strip()
-    if focus:
-        updated_history.append({"role": "user", "content": f"Critic focus: {focus}"})
-    updated_history.append(
-        {
-            "role": "assistant",
-            "content": f"Critic verdict: {updated_latest.get('critic_verdict', 'major_rework_required')} "
-            f"(risk {updated_latest.get('critic_risk_score', 70)}/100, "
-            f"iterations {iterations_used}/{iteration_limit}).",
-        }
-    )
-    updated_payload = {
-        **session,
-        "latest_result": updated_latest,
-        "chat_history": updated_history,
-        "critic_runs": current_runs + 1,
-    }
-    SESSION_STORE.set(request.session_id, updated_payload)
-    _persist_conversation(request.session_id, updated_payload)
-    return DesignCriticResponse(
-        session_id=request.session_id,
-        critic_feedback=critic_feedback,
-        critic_summary=critic_summary,
-        suggested_improvements=updated_latest.get("critic_suggested_improvements", []),
-        overall_verdict=updated_latest.get("critic_verdict", "major_rework_required"),
-        risk_score=updated_latest.get("critic_risk_score", 70),
-        reasoning_summary=updated_latest.get("critic_reasoning_summary", ""),
-    )
 
 
 @router.post("/design/followup", response_model=FollowUpResponse)
@@ -1110,8 +865,6 @@ async def design_followup(request: FollowUpRequest) -> FollowUpResponse:
                 message,
             )
         result.setdefault("requirements", {})["preferred_language"] = preferred_language
-        result.setdefault("critic_run_limit", _CRITIC_MAX_RUNS_PER_SESSION)
-        result.setdefault("critic_runs_used", int(session.get("critic_runs", 0)))
         result["diagram_style"] = diagram_style
         result = _attach_mermaid_metadata(result, source="followup", previous_result=previous_result)
         result = normalize_workflow_result(result)

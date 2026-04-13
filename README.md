@@ -127,15 +127,15 @@ Primary LangGraph pipeline (`graph/workflow.py`):
 2. `select_template`
 3. `generate_architecture`
 4. `inject_edge_cases`
-5. `select_primary_architecture`
-6. `diagram_generator`
-7. `diagram_quality_agent`
-8. `report_generator`
-9. `cloud_infra_agent`
+5. `critic_agent`
+6. `revision_agent`
+7. `diagram_generator`
+8. `diagram_quality_agent`
+9. `report_generator`
+10. `cloud_infra_agent`
 
 API also exposes additional loops on top of this base flow:
 - async operation progress (`/design/async`, `/design/followup/async`)
-- premium critic loop (`/design/critic`: judge + reviser + regenerated outputs)
 - cloud redesign (`/design/cloud-redesign`: provider-specific diagram/report regeneration)
 
 See [Agentic Architecture](docs/agentic-architecture.md) for more detail.
