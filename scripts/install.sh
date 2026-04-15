@@ -16,29 +16,27 @@ GETTING_STARTED_URL="${LETSVIBEDESIGN_GETTING_STARTED_URL:-https://github.com/km
 BRAND="desysflow🌀"
 LOG_DIR="${TMPDIR:-/tmp}"
 INSTALL_LOG=""
+PLATFORM=""
+RC_FILE=""
+
+print_header() {
+  printf '%s install\n' "$BRAND"
+}
 
 log() {
-  printf '%s %s\n' "$BRAND" "$1"
+  printf '> %s\n' "$1"
 }
 
 warn() {
-  printf '%s %s\n' "$BRAND warning:" "$1" >&2
+  printf '> warning: %s\n' "$1" >&2
 }
 
 die() {
-  printf '%s %s\n' "$BRAND error:" "$1" >&2
+  printf '> error: %s\n' "$1" >&2
   if [ -n "${INSTALL_LOG:-}" ] && [ -f "$INSTALL_LOG" ]; then
-    printf '\nLog: %s\n' "$INSTALL_LOG" >&2
+    printf '> log: %s\n' "$INSTALL_LOG" >&2
   fi
   exit 1
-}
-
-step() {
-  printf '\n%s %s\n' "$BRAND" "$1"
-}
-
-success() {
-  printf '%s %s\n' "$BRAND done:" "$1"
 }
 
 run_logged() {
@@ -46,7 +44,7 @@ run_logged() {
   shift
   printf '\n[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$label" >> "$INSTALL_LOG"
   if ! "$@" >> "$INSTALL_LOG" 2>&1; then
-    warn "$label failed. Recent log output:"
+    warn "$label failed"
     tail -n 40 "$INSTALL_LOG" >&2 || true
     return 1
   fi
@@ -54,7 +52,7 @@ run_logged() {
 
 prepare_log_file() {
   mkdir -p "$LOG_DIR"
-  INSTALL_LOG="$(mktemp "$LOG_DIR/desysflow-install.XXXXXX.log")"
+  INSTALL_LOG="$(mktemp "${LOG_DIR%/}/desysflow-install.XXXXXX")"
 }
 
 has_cmd() {
@@ -74,9 +72,7 @@ detect_platform() {
   case "$kernel" in
     Darwin) PLATFORM="macos" ;;
     Linux) PLATFORM="linux" ;;
-    *)
-      die "unsupported platform: $kernel"
-      ;;
+    *) die "unsupported platform: $kernel" ;;
   esac
 
   if [ "$PLATFORM" = "linux" ] && grep -qiE '(microsoft|wsl)' /proc/version 2>/dev/null; then
@@ -112,31 +108,31 @@ ensure_system_deps() {
     if ! has_cmd brew; then
       die "Homebrew is required to auto-install dependencies on macOS. Install brew, then rerun this script."
     fi
-    step "Installing missing system packages with Homebrew"
+    log "installing required packages with Homebrew"
     run_logged "brew install git node" brew install git node
-    success "System packages installed"
+    log "required packages installed"
     return
   fi
 
   if has_cmd apt-get; then
-    step "Installing missing system packages with apt"
+    log "installing required packages with apt"
     run_logged "sudo apt-get update" sudo apt-get update
     run_logged "sudo apt-get install -y curl git nodejs npm" sudo apt-get install -y curl git nodejs npm
-    success "System packages installed"
+    log "required packages installed"
     return
   fi
 
   if has_cmd dnf; then
-    step "Installing missing system packages with dnf"
+    log "installing required packages with dnf"
     run_logged "sudo dnf install -y curl git nodejs npm" sudo dnf install -y curl git nodejs npm
-    success "System packages installed"
+    log "required packages installed"
     return
   fi
 
   if has_cmd pacman; then
-    step "Installing missing system packages with pacman"
+    log "installing required packages with pacman"
     run_logged "sudo pacman -Sy --noconfirm curl git nodejs npm" sudo pacman -Sy --noconfirm curl git nodejs npm
-    success "System packages installed"
+    log "required packages installed"
     return
   fi
 
@@ -152,7 +148,7 @@ ensure_uv() {
     die "uv is required in offline mode. Install uv first, then rerun."
   fi
 
-  step "Installing uv"
+  log "installing uv"
   run_logged "Installing uv via Astral installer" sh -c 'curl -LsSf https://astral.sh/uv/install.sh | sh'
 
   if [ -x "$HOME/.local/bin/uv" ]; then
@@ -161,7 +157,7 @@ ensure_uv() {
   fi
 
   has_cmd uv || die "uv installation completed but uv is still not on PATH"
-  success "uv is ready"
+  log "uv ready"
 }
 
 install_repo() {
@@ -171,19 +167,19 @@ install_repo() {
     LOCAL_REPO="$(cd "$LOCAL_REPO" && pwd)"
     [ -f "$LOCAL_REPO/letsvibedesign" ] || die "LETSVIBEDESIGN_LOCAL_REPO does not look like a desysflow checkout: $LOCAL_REPO"
     REPO_DIR="$LOCAL_REPO"
-    success "Using local repository at $REPO_DIR"
+    log "using local repository: $REPO_DIR"
     return
   fi
 
   if [ -d "$REPO_DIR/.git" ]; then
     if is_true "$OFFLINE"; then
-      success "Using existing offline installation at $REPO_DIR"
+      log "using existing offline installation: $REPO_DIR"
       return
     fi
-    step "Updating existing installation"
+    log "updating repository"
     run_logged "git fetch origin $REPO_REF --depth 1" git -C "$REPO_DIR" fetch origin "$REPO_REF" --depth 1
     run_logged "git checkout -B $REPO_REF origin/$REPO_REF" git -C "$REPO_DIR" checkout -B "$REPO_REF" "origin/$REPO_REF"
-    success "Repository updated"
+    log "repository updated"
     return
   fi
 
@@ -195,28 +191,28 @@ install_repo() {
     die "offline mode requires an existing install at $REPO_DIR or LETSVIBEDESIGN_LOCAL_REPO to be set"
   fi
 
-  step "Cloning repository"
+  log "cloning repository"
   run_logged "git clone --depth 1 --branch $REPO_REF $REPO_URL $REPO_DIR" git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$REPO_DIR"
-  success "Repository cloned"
+  log "repository ready"
 }
 
 bootstrap_repo() {
-  step "Bootstrapping runtime"
+  log "bootstrapping runtime"
   run_logged "bootstrap.sh" env \
     REPO_DIR="$REPO_DIR" \
     DESYSFLOW_BOOTSTRAP_PYTHON="${DESYSFLOW_BOOTSTRAP_PYTHON:-3.11}" \
     bash -c '
-    cd "$REPO_DIR"
-    DESYSFLOW_BOOTSTRAP_NON_INTERACTIVE=1 \
-    DESYSFLOW_SKIP_MODEL_CHECK=1 \
-    DESYSFLOW_BOOTSTRAP_PYTHON="$DESYSFLOW_BOOTSTRAP_PYTHON" \
-    ./scripts/bootstrap.sh
-  '
-  success "Python environment and UI dependencies are ready"
+      cd "$REPO_DIR"
+      DESYSFLOW_BOOTSTRAP_NON_INTERACTIVE=1 \
+      DESYSFLOW_SKIP_MODEL_CHECK=1 \
+      DESYSFLOW_BOOTSTRAP_PYTHON="$DESYSFLOW_BOOTSTRAP_PYTHON" \
+      ./scripts/bootstrap.sh
+    '
+  log "runtime ready"
 }
 
 install_launcher() {
-  step "Installing launcher"
+  log "installing launcher"
   mkdir -p "$BIN_DIR"
   cat > "$LAUNCHER_PATH" <<EOF
 #!/usr/bin/env bash
@@ -224,11 +220,30 @@ set -euo pipefail
 exec "$REPO_DIR/letsvibedesign" "\$@"
 EOF
   chmod +x "$LAUNCHER_PATH"
-  success "Launcher installed at $LAUNCHER_PATH"
+  log "launcher installed: $LAUNCHER_PATH"
 }
 
 shell_rc_path() {
-  case "${SHELL:-}" in
+  case "$PLATFORM:${SHELL:-}" in
+    macos:*/zsh)
+      printf '%s\n' "$HOME/.zshrc"
+      ;;
+    macos:*/bash)
+      if [ -f "$HOME/.bash_profile" ]; then
+        printf '%s\n' "$HOME/.bash_profile"
+      else
+        printf '%s\n' "$HOME/.bashrc"
+      fi
+      ;;
+    macos:*)
+      printf '%s\n' "$HOME/.zshrc"
+      ;;
+    linux:*/zsh|wsl2:*/zsh)
+      printf '%s\n' "$HOME/.zshrc"
+      ;;
+    linux:*|wsl2:*)
+      printf '%s\n' "$HOME/.bashrc"
+      ;;
     */zsh)
       printf '%s\n' "$HOME/.zshrc"
       ;;
@@ -250,8 +265,8 @@ shell_rc_path() {
 }
 
 ensure_path_export() {
-  local path_dir path_line rc_file
-  rc_file="$(shell_rc_path)"
+  local path_dir path_line
+  RC_FILE="$(shell_rc_path)"
   path_dir="$BIN_DIR"
   if [ "$path_dir" = "$HOME/.local/bin" ]; then
     path_line='export PATH="$HOME/.local/bin:$PATH"'
@@ -259,55 +274,39 @@ ensure_path_export() {
     path_line="export PATH=\"$path_dir:\$PATH\""
   fi
 
-  mkdir -p "$(dirname "$rc_file")"
-  touch "$rc_file"
+  mkdir -p "$(dirname "$RC_FILE")"
+  touch "$RC_FILE"
 
-  if ! grep -Fqx "$path_line" "$rc_file"; then
-    step "Updating shell PATH"
+  if ! grep -Fqx "$path_line" "$RC_FILE"; then
+    log "adding $BIN_DIR to PATH in $RC_FILE"
     {
       printf '\n# letsvibedesign\n'
       printf '%s\n' "$path_line"
-    } >> "$rc_file"
-    success "Added $BIN_DIR to PATH in $rc_file"
+    } >> "$RC_FILE"
   else
-    success "PATH already includes $BIN_DIR in $rc_file"
+    log "PATH already includes $BIN_DIR in $RC_FILE"
   fi
 }
 
 print_next_steps() {
-  local rc_file
-  rc_file="$(shell_rc_path)"
-
-  cat <<EOF
-
-$BRAND installed successfully.
-
-Run:
-  source "$rc_file" && letsvibedesign
-
-Paths:
-  Repo: $REPO_DIR
-  Launcher: $LAUNCHER_PATH
-  Shell rc: $rc_file
-
-GitHub:
-  README: $README_URL
-  Docs: $DOCS_URL
-  Getting started: $GETTING_STARTED_URL
-
-Notes:
-  - Platform: $PLATFORM
-  - Offline mode: $OFFLINE
-  - Default config: $REPO_DIR/.env.example
-  - Install log: $INSTALL_LOG
-EOF
+  printf '\n%s installed\n' "$BRAND"
+  printf '> platform: %s\n' "$PLATFORM"
+  printf '> repo: %s\n' "$REPO_DIR"
+  printf '> launcher: %s\n' "$LAUNCHER_PATH"
+  printf '> shell rc: %s\n' "$RC_FILE"
+  printf '> run: source "%s" && letsvibedesign\n' "$RC_FILE"
+  printf '> readme: %s\n' "$README_URL"
+  printf '> docs: %s\n' "$DOCS_URL"
+  printf '> getting started: %s\n' "$GETTING_STARTED_URL"
+  printf '> config: %s/.env.example\n' "$REPO_DIR"
+  printf '> install log: %s\n' "$INSTALL_LOG"
 }
 
 main() {
   prepare_log_file
   detect_platform
-  log "$BRAND installer"
-  success "Detected platform: $PLATFORM"
+  print_header
+  log "platform: $PLATFORM"
   ensure_system_deps
   ensure_uv
   install_repo
