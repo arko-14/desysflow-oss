@@ -57,10 +57,15 @@ When flags are omitted in an interactive terminal, CLI asks for:
 - style (`minimal`, `balanced`, `detailed`)
 - web-search mode (`auto`, `on`, `off`)
 - role/persona
-- input mode (`vibe-now` or `ask`)
-- optional prompt text for both modes (`vibe-now` + prompt is supported)
+- input mode (`vibe-now` or `ask`) for non-empty repositories
+- prompt text immediately for empty repositories
+- optional prompt text for non-empty repositories when `ask` is selected
 
 Choices use plain typed/numeric selection.
+
+Repository-aware defaults:
+- If the current repository contains source files, CLI detects the dominant language by file extension count and uses that as the default language.
+- If the current repository is empty, CLI skips `Input mode` and directly asks for the product or feature prompt.
 
 Launcher loop commands:
 - `Enter` or `run`: run `desysflow design` again with normal interactive prompts

@@ -110,6 +110,10 @@ desysflow design \
   --no-interactive
 ```
 
+Interactive defaults:
+- Empty repositories skip the `Input mode` chooser and immediately ask what you want to design.
+- Non-empty repositories detect the dominant codebase language and use it as the default language selection.
+
 ## UI Usage
 
 Start API + UI together:
