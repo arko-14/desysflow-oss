@@ -106,7 +106,7 @@ class DesignRequest(BaseModel):
     )
     provider: str = Field(
         default="",
-        description="LLM provider override: openai, anthropic, or ollama",
+        description="LLM provider override: openai, anthropic, groq, or ollama",
     )
     model: str = Field(
         default="",
@@ -114,7 +114,7 @@ class DesignRequest(BaseModel):
     )
     api_key: str = Field(
         default="",
-        description="Optional runtime API key override (OpenAI/Anthropic only).",
+        description="Optional runtime API key override (OpenAI/Anthropic/Groq only).",
     )
     base_url: str = Field(
         default="",
@@ -219,7 +219,7 @@ class FollowUpRequest(BaseModel):
     )
     provider: str = Field(
         default="",
-        description="LLM provider override: openai, anthropic, or ollama",
+        description="LLM provider override: openai, anthropic, groq, or ollama",
     )
     model: str = Field(
         default="",
@@ -227,7 +227,7 @@ class FollowUpRequest(BaseModel):
     )
     api_key: str = Field(
         default="",
-        description="Optional runtime API key override (OpenAI/Anthropic only).",
+        description="Optional runtime API key override (OpenAI/Anthropic/Groq only).",
     )
     base_url: str = Field(
         default="",
@@ -255,7 +255,7 @@ class LLMCheckRequest(BaseModel):
     """POST /health/llm-check request body."""
     provider: str = Field(
         default="",
-        description="Provider to validate: openai, anthropic, or ollama.",
+        description="Provider to validate: openai, anthropic, groq, or ollama.",
     )
     model: str = Field(
         default="",

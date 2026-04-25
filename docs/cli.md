@@ -49,9 +49,9 @@ desysflow redesign --source . --out ./.desysflow --project desysflow-cli --focus
 ## Interactive Prompts
 
 When flags are omitted in an interactive terminal, CLI asks for:
-- provider (`openai`, `anthropic`, `ollama`)
+- provider (`openai`, `anthropic`, `groq`, `ollama`)
 - model name
-- API key (OpenAI/Anthropic only)
+- API key (OpenAI/Anthropic/Groq only)
 - language (`python`, `typescript`, `go`, `java`, `rust`)
 - cloud target (`local`, `aws`, `gcp`, `azure`, `hybrid`)
 - style (`minimal`, `balanced`, `detailed`)
@@ -61,6 +61,7 @@ When flags are omitted in an interactive terminal, CLI asks for:
 - optional prompt text for non-empty repositories, including when the repo already has an existing `.desysflow` baseline
 
 Choices use plain typed/numeric selection.
+For Groq, the CLI can fetch the live model list and let you pick by number when `GROQ_API_KEY` is available.
 
 Repository-aware defaults:
 - If the current repository contains source files, CLI detects the dominant language by file extension count and uses that as the default language.

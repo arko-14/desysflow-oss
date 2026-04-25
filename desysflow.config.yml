@@ -64,6 +64,11 @@ providers:
     label: Ollama-lover
     desc: Local models via Ollama
     default_model: "gpt-oss:20b-cloud"
+  - id: groq
+    label: Groq-lover
+    desc: Groq hosted models
+    default_model: openai/gpt-oss-20b
+
 
 # ─────────────────────────────────────────────────────────────────
 # Defaults — values used when nothing is explicitly selected
