@@ -57,6 +57,86 @@ def _sanitise_mermaid(raw: str) -> str:
     return cleaned
 
 
+def _clean_label(value: Any, fallback: str) -> str:
+    text = str(value).strip() if value is not None else ""
+    return text or fallback
+
+
+def _fallback_mermaid_from_architecture(architecture: Dict[str, Any]) -> str:
+    services = [_clean_label(item, "Application Service") for item in architecture.get("services", [])[:4]]
+    databases = [_clean_label(item, "Primary Database") for item in architecture.get("databases", [])[:2]]
+    queues = [_clean_label(item, "Async Queue") for item in architecture.get("message_queues", [])[:1]]
+    caches = [_clean_label(item, "Redis Cache") for item in architecture.get("caching_layer", [])[:1]]
+    scale = _clean_label(architecture.get("scaling_strategy"), "Horizontal scaling with stateless services.")
+
+    lines = [
+        "flowchart TD",
+        "    user[Client / User]",
+        "    gateway[Edge / API Gateway]",
+        "    user -->|HTTPS request| gateway",
+        "",
+        "    subgraph app[Application Services]",
+    ]
+    if services:
+        for idx, svc in enumerate(services, 1):
+            lines.append(f'        svc{idx}["{svc.replace(chr(34), chr(39))}"]')
+        lines.append("    end")
+        lines.append(f"    gateway -->|route| svc1")
+        for idx in range(1, len(services)):
+            lines.append(f"    svc{idx} -->|internal call| svc{idx + 1}")
+    else:
+        lines.append('        svc1["Core Application Service"]')
+        lines.append("    end")
+        lines.append("    gateway -->|route| svc1")
+
+    if caches:
+        lines.extend([
+            "",
+            "    subgraph cache[Cache Layer]",
+            f'        cache1["{caches[0].replace(chr(34), chr(39))}"]',
+            "    end",
+            "    svc1 -->|cache read/write| cache1",
+        ])
+
+    if databases:
+        lines.extend(["", "    subgraph data[Data Stores]"])
+        for idx, db in enumerate(databases, 1):
+            lines.append(f'        db{idx}[("{db.replace(chr(34), chr(39))}")]')
+        lines.append("    end")
+        lines.append("    svc1 -->|read/write| db1")
+
+    if queues:
+        lines.extend([
+            "",
+            "    subgraph async[Async Processing]",
+            f'        queue1["{queues[0].replace(chr(34), chr(39))}"]',
+            '        worker["Background Worker"]',
+            "    end",
+            "    svc1 -->|publish| queue1",
+            "    queue1 -->|consume| worker",
+        ])
+        if databases:
+            lines.append("    worker -->|persist result| db1")
+
+    lines.extend([
+        "",
+        "    decision{Cache hit?}",
+        "    gateway --> decision",
+        "    decision -->|yes| svc1",
+        "    decision -->|no| svc1",
+        '    obs["Observability / Alerts"]',
+        "    svc1 -. metrics/logs .-> obs",
+    ])
+    if queues:
+        lines.extend([
+            '    dlq["DLQ / Retry Queue"]',
+            "    worker -. failure .-> dlq",
+        ])
+    lines.append(f'    note["Scaling: {scale.replace(chr(34), chr(39))}"]')
+    lines.append("    svc1 -. policy .-> note")
+    return "\n".join(lines)
+
+
 def diagram_generator(state: AgentState) -> Dict[str, Any]:
     """LangGraph node — generate Mermaid diagram from final architecture."""
     revised = state.get("revised_architecture", {})
@@ -92,22 +172,14 @@ def diagram_generator(state: AgentState) -> Dict[str, Any]:
         logger.debug("Diagram response: %s", raw[:500])
 
         mermaid_code = _sanitise_mermaid(raw)
+        if len(mermaid_code.splitlines()) < 4:
+            raise ValueError("Model returned an incomplete Mermaid diagram")
         logger.info("Mermaid diagram generated (%d chars)", len(mermaid_code))
         return {"mermaid_code": mermaid_code}
 
     except Exception as exc:
-        logger.error("Diagram generation failed: %s", exc)
-        # Build a minimal fallback diagram from the architecture data
-        services = architecture.get("services", ["Service"])
-        lines = ["flowchart TD"]
-        for i, svc in enumerate(services):
-            node_id = f"S{i}"
-            label = svc.replace('"', "'")
-            lines.append(f'    {node_id}["{label}"]')
-        # Chain them linearly
-        for i in range(len(services) - 1):
-            lines.append(f"    S{i} --> S{i + 1}")
-        return {"mermaid_code": "\n".join(lines)}
+        logger.warning("Diagram generation fallback used: %s", exc)
+        return {"mermaid_code": _fallback_mermaid_from_architecture(architecture)}
 
 
 _CLOUD_DIAGRAM_PROMPT = """You are a principal architect specialising in {provider} cloud architecture.
@@ -166,8 +238,10 @@ def generate_cloud_diagram(
             response.content if hasattr(response, "content") else response
         )
         mermaid_code = _sanitise_mermaid(raw)
+        if len(mermaid_code.splitlines()) < 4:
+            raise ValueError("Model returned an incomplete Mermaid diagram")
         logger.info("Cloud diagram (%s) generated (%d chars)", provider, len(mermaid_code))
         return mermaid_code
     except Exception as exc:
-        logger.error("Cloud diagram generation failed: %s", exc)
-        return f"flowchart TD\n    A[{label} Architecture]\n    A --> B[Services]\n    B --> C[Data Layer]"
+        logger.warning("Cloud diagram fallback used: %s", exc)
+        return _fallback_mermaid_from_architecture(architecture)
