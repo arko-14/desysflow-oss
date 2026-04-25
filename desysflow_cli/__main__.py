@@ -16,7 +16,13 @@ from typing import Any
 import yaml
 
 from services.storage_paths import get_storage_root
-from services.llm import check_llm_status, get_llm_config, is_llm_limit_error, list_ollama_models
+from services.llm import (
+    check_llm_status,
+    get_llm_config,
+    is_llm_limit_error,
+    list_groq_models,
+    list_ollama_models,
+)
 from graph.workflow import run_workflow_with_updates
 from utils.design_doc import build_system_design_doc
 from utils.non_technical_doc import build_non_technical_doc
@@ -332,6 +338,46 @@ def _provider_defaults() -> dict[str, dict[str, str]]:
     return result
 
 
+def _provider_api_key_env_key(provider: str) -> str:
+    if provider == "openai":
+        return "OPENAI_API_KEY"
+    if provider == "anthropic":
+        return "ANTHROPIC_API_KEY"
+    if provider == "groq":
+        return "GROQ_API_KEY"
+    return ""
+
+
+def _provider_base_url_env_key(provider: str) -> str:
+    if provider == "openai":
+        return "OPENAI_BASE_URL"
+    if provider == "anthropic":
+        return "ANTHROPIC_BASE_URL"
+    if provider == "groq":
+        return "GROQ_BASE_URL"
+    return "OLLAMA_BASE_URL"
+
+
+def _provider_model_env_key(provider: str) -> str:
+    if provider == "openai":
+        return "OPENAI_MODEL"
+    if provider == "anthropic":
+        return "ANTHROPIC_MODEL"
+    if provider == "groq":
+        return "GROQ_MODEL"
+    return "OLLAMA_MODEL"
+
+
+def _provider_default_base_url(provider: str) -> str:
+    if provider == "openai":
+        return "https://api.openai.com/v1"
+    if provider == "anthropic":
+        return "https://api.anthropic.com"
+    if provider == "groq":
+        return "https://api.groq.com/openai/v1"
+    return "http://localhost:11434"
+
+
 def _prompt_provider(default: str = "") -> str:
     providers = cfg_providers()
     print("")
@@ -399,6 +445,33 @@ def _resolve_ollama_model_selection(
         raise SystemExit("Aborted.")
 
 
+def _resolve_hosted_model_selection(
+    provider: str,
+    available: list[str],
+    default: str = "",
+) -> str:
+    if not available:
+        return _prompt_model(provider, [], default)
+
+    print("")
+    print(f"  Available {provider.title()} models:")
+    for idx, item in enumerate(available, 1):
+        suffix = " (default)" if item == default else ""
+        print(f"  {idx}) {item}{suffix}")
+
+    while True:
+        raw = input(f"Select model [1-{len(available)}] or type model id: ").strip()
+        if not raw and default:
+            return default
+        if raw.isdigit():
+            selection = int(raw) - 1
+            if 0 <= selection < len(available):
+                return available[selection]
+        if raw:
+            return raw
+        print("  Invalid selection.")
+
+
 def _is_meaningful_source_file(path: Path) -> bool:
     name = path.name.lower()
     if name in MEANINGFUL_SOURCE_FILENAMES:
@@ -436,11 +509,11 @@ def resolve_model(cfg: RunConfig) -> RunConfig:
     if not provider:
         provider = "ollama"
     provider = provider.lower()
-    if provider not in ("openai", "anthropic", "ollama"):
+    if provider not in ("openai", "anthropic", "groq", "ollama"):
         provider = "ollama"
 
-    # 2. API key: CLI flag → env var → prompt (openai/anthropic only)
-    env_key = "OPENAI_API_KEY" if provider == "openai" else "ANTHROPIC_API_KEY"
+    # 2. API key: CLI flag → env var → prompt (hosted providers only)
+    env_key = _provider_api_key_env_key(provider)
     api_key = cfg.api_key or os.getenv(env_key, "").strip()
     if provider != "ollama" and interactive and not model_flags_supplied:
         api_key = _prompt_api_key(provider, api_key)
@@ -450,12 +523,8 @@ def resolve_model(cfg: RunConfig) -> RunConfig:
         os.environ[env_key] = api_key
 
     # 3. Base URL: CLI flag → env var → provider default
-    base_url_env_key = "OPENAI_BASE_URL" if provider == "openai" else ("ANTHROPIC_BASE_URL" if provider == "anthropic" else "OLLAMA_BASE_URL")
-    base_url_default = (
-        "https://api.openai.com/v1" if provider == "openai"
-        else "https://api.anthropic.com" if provider == "anthropic"
-        else "http://localhost:11434"
-    )
+    base_url_env_key = _provider_base_url_env_key(provider)
+    base_url_default = _provider_default_base_url(provider)
     base_url = cfg.base_url or os.getenv(base_url_env_key, "").strip() or base_url_default
     os.environ[base_url_env_key] = base_url
 
@@ -463,13 +532,19 @@ def resolve_model(cfg: RunConfig) -> RunConfig:
     installed: list[str] = []
     if provider == "ollama":
         installed = list_ollama_models(base_url)
+    elif provider == "groq":
+        installed = list_groq_models(base_url, api_key)
 
-    env_model_key = "OPENAI_MODEL" if provider == "openai" else ("ANTHROPIC_MODEL" if provider == "anthropic" else "OLLAMA_MODEL")
+    env_model_key = _provider_model_env_key(provider)
     model = cfg.model_name or os.getenv(env_model_key, "").strip()
     if provider == "ollama" and interactive:
         prompt_default = model or _provider_defaults().get(provider, {}).get("model", "")
         if not model_flags_supplied or not model:
             model = _resolve_ollama_model_selection(installed, base_url, prompt_default)
+    elif provider == "groq" and interactive:
+        prompt_default = model or _provider_defaults().get(provider, {}).get("model", "")
+        if not model_flags_supplied or not model:
+            model = _resolve_hosted_model_selection(provider, installed, prompt_default)
     elif interactive and not model_flags_supplied:
         model = _prompt_model(provider, installed, model)
     elif not model and interactive:
@@ -2571,7 +2646,7 @@ def run_wizard() -> int:
     # ── API key (GPT / Claude) ───────────────────────────────────
     api_key = ""
     if provider != "ollama":
-        env_key = "OPENAI_API_KEY" if provider == "openai" else "ANTHROPIC_API_KEY"
+        env_key = _provider_api_key_env_key(provider)
         api_key = os.getenv(env_key, "").strip()
         if not api_key:
             print(f"\n  {provider.title()} selected — paste your API key below.")
@@ -2581,12 +2656,8 @@ def run_wizard() -> int:
                 os.environ[env_key] = api_key
 
     # ── Base URL ─────────────────────────────────────────────────
-    base_url_env_key = "OPENAI_BASE_URL" if provider == "openai" else ("ANTHROPIC_BASE_URL" if provider == "anthropic" else "OLLAMA_BASE_URL")
-    base_url_default = (
-        "https://api.openai.com/v1" if provider == "openai"
-        else "https://api.anthropic.com" if provider == "anthropic"
-        else "http://localhost:11434"
-    )
+    base_url_env_key = _provider_base_url_env_key(provider)
+    base_url_default = _provider_default_base_url(provider)
     base_url = os.getenv(base_url_env_key, "").strip() or base_url_default
     os.environ[base_url_env_key] = base_url
 
@@ -2595,21 +2666,20 @@ def run_wizard() -> int:
     installed: list[str] = []
     if provider == "ollama":
         installed = list_ollama_models(base_url)
+    elif provider == "groq":
+        installed = list_groq_models(base_url, api_key)
 
     default = prov_defaults.get(provider, {}).get("model", "") or (installed[0] if installed else "")
     print("")
     if provider == "ollama":
         model = _resolve_ollama_model_selection(installed, base_url, default)
+    elif provider == "groq":
+        model = _resolve_hosted_model_selection(provider, installed, default)
     else:
         model = input(f"  Model name" + (f" [{default}]" if default else "") + ": ").strip() or default
 
     os.environ["MODEL_PROVIDER"] = provider
-    if provider == "openai":
-        os.environ["OPENAI_MODEL"] = model
-    elif provider == "anthropic":
-        os.environ["ANTHROPIC_MODEL"] = model
-    else:
-        os.environ["OLLAMA_MODEL"] = model
+    os.environ[_provider_model_env_key(provider)] = model
 
     # ── Source checkpoints ───────────────────────────────────────
     source_path = Path.cwd()

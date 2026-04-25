@@ -126,6 +126,15 @@ def _build_llm_config(
             timeout=int(os.getenv("ANTHROPIC_TIMEOUT", str(_DEFAULT_TIMEOUT))),
             api_key=api_key or os.getenv("ANTHROPIC_API_KEY", "").strip(),
         )
+    if provider == "groq":
+        return LLMConfig(
+            provider=provider,
+            model=model or os.getenv("GROQ_MODEL", "openai/gpt-oss-20b").strip() or "openai/gpt-oss-20b",
+            temperature=float(os.getenv("GROQ_TEMPERATURE", str(_DEFAULT_TEMPERATURE))),
+            base_url=base_url or os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").strip(),
+            timeout=int(os.getenv("GROQ_TIMEOUT", str(_DEFAULT_TIMEOUT))),
+            api_key=api_key or os.getenv("GROQ_API_KEY", "").strip(),
+        )
     base_url = _normalise_ollama_base_url(base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").strip())
     return LLMConfig(
         provider="ollama",
@@ -170,6 +179,15 @@ def get_critic_llm_config() -> CriticLLMConfig:
             timeout=int(os.getenv("ANTHROPIC_CRITIC_TIMEOUT", "300")),
             api_key=base.api_key,
         )
+    if base.provider == "groq":
+        return CriticLLMConfig(
+            provider=base.provider,
+            model=os.getenv("GROQ_CRITIC_MODEL", base.model).strip() or base.model,
+            temperature=float(os.getenv("GROQ_CRITIC_TEMPERATURE", "0.1")),
+            base_url=base.base_url,
+            timeout=int(os.getenv("GROQ_CRITIC_TIMEOUT", "300")),
+            api_key=base.api_key,
+        )
     return CriticLLMConfig(
         provider="ollama",
         model=os.getenv("OLLAMA_CRITIC_MODEL", base.model).strip() or base.model,
@@ -192,6 +210,10 @@ def check_llm_status(probe: bool = True) -> dict[str, str]:
         if not cfg.api_key:
             return _status(cfg, "unavailable", "ANTHROPIC_API_KEY is not set.")
         return _check_anthropic_status(cfg, probe=probe)
+    if cfg.provider == "groq":
+        if not cfg.api_key:
+            return _status(cfg, "unavailable", "GROQ_API_KEY is not set.")
+        return _check_openai_status(cfg, probe=probe)
     return _status(cfg, "unavailable", f"Unsupported provider: {cfg.provider}")
 
 
@@ -201,6 +223,16 @@ def is_llm_available() -> bool:
 
 def _build_llm(cfg: LLMConfig):
     if cfg.provider == "openai":
+        from langchain_openai import ChatOpenAI
+
+        return ChatOpenAI(
+            model=cfg.model,
+            temperature=cfg.temperature,
+            base_url=cfg.base_url,
+            api_key=cfg.api_key,
+            timeout=cfg.timeout,
+        )
+    if cfg.provider == "groq":
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(
@@ -280,6 +312,16 @@ def _build_critic_llm(cfg: CriticLLMConfig):
             api_key=cfg.api_key,
             timeout=cfg.timeout,
         )
+    if cfg.provider == "groq":
+        from langchain_openai import ChatOpenAI
+
+        return ChatOpenAI(
+            model=cfg.model,
+            temperature=cfg.temperature,
+            base_url=cfg.base_url,
+            api_key=cfg.api_key,
+            timeout=cfg.timeout,
+        )
     if cfg.provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
 
@@ -332,6 +374,33 @@ def list_ollama_models(base_url: str = "http://localhost:11434") -> list[str]:
             for item in payload.get("models", [])
             if isinstance(item, dict) and item.get("name")
         ]
+    except Exception:
+        return []
+
+
+def list_groq_models(
+    base_url: str = "https://api.groq.com/openai/v1",
+    api_key: str = "",
+) -> list[str]:
+    """Return list of available Groq model ids."""
+    if not api_key.strip():
+        return []
+    try:
+        response = httpx.get(
+            f"{base_url.rstrip('/')}/models",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=5.0,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        return sorted(
+            str(item.get("id", "")).strip()
+            for item in payload.get("data", [])
+            if isinstance(item, dict) and item.get("id")
+        )
     except Exception:
         return []
 

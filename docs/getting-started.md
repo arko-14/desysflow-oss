@@ -101,8 +101,10 @@ Environment variables are stored in local `.env.example`. Typical keys:
 - `OLLAMA_NUM_PREDICT`
 - `OPENAI_MODEL`
 - `ANTHROPIC_MODEL`
+- `GROQ_MODEL`
 - `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
+- `GROQ_API_KEY`
 - `DESYSFLOW_STORAGE_ROOT`
 - `LLM_GUARDRAIL` — set to `true` to enable secret-leak detection on LLM output
 
@@ -110,13 +112,13 @@ Environment variables are stored in local `.env.example`. Typical keys:
 
 - CLI interactive:
   - run `desysflow design` and choose provider/model
-  - for OpenAI/Anthropic, provide API key when prompted
+  - for OpenAI/Anthropic/Groq, provide API key when prompted
 - CLI explicit flags:
   - `--model-provider`, `--model`, `--api-key`
 - UI:
   - use the setup modal (gear icon) to set provider/model/API key
   - `Check status` performs a live provider check:
-    - OpenAI/Anthropic: auth + endpoint probe
+    - OpenAI/Anthropic/Groq: auth + endpoint probe
     - Ollama: local endpoint reachability + model presence
 
 ### Config File

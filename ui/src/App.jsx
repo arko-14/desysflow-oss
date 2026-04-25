@@ -170,6 +170,7 @@ const FALLBACK_CONFIG = {
   providers: [
     { id: 'openai',    label: 'GPT-lover',    desc: 'OpenAI GPT models',      default_model: 'gpt-4o' },
     { id: 'anthropic', label: 'Claude-lover',  desc: 'Anthropic Claude models', default_model: 'claude-sonnet-4-20250514' },
+    { id: 'groq',      label: 'Groq-lover',    desc: 'Groq hosted models',     default_model: 'openai/gpt-oss-20b' },
     { id: 'ollama',    label: 'Ollama-lover',  desc: 'Local models via Ollama', default_model: 'gpt-oss:20b-cloud' },
   ],
   defaults: { role: 'DevOps', language: 'Python', style: 'balanced', cloud: 'local', search_mode: 'auto' },
@@ -218,7 +219,7 @@ function SetupModal({ saved, onSave, config }) {
 
   const handleSave = () => {
     if (!provider)                             { setError('Select a provider.'); return }
-    if (provider !== 'ollama' && !apiKey.trim()) { setError('API key required for GPT/Claude.'); return }
+    if (provider !== 'ollama' && !apiKey.trim()) { setError('API key required for hosted providers.'); return }
     if (!model.trim())                        { setError('Model name is required.'); return }
     setError('')
     onSave({ provider, model: model.trim(), apiKey: apiKey.trim() })

@@ -25,7 +25,7 @@ It includes:
 - Local-first workflow with repo-native outputs
 - Versioned design artifacts (`v1`, `v2`, ...)
 - Structured outputs (HLD, LLD, technical report, non-technical brief, diagrams, diffs)
-- Provider-flexible LLM support (`ollama`, `openai`, `anthropic`)
+- Provider-flexible LLM support (`ollama`, `openai`, `anthropic`, `groq`)
 - Optional secret-leak guardrail on LLM output
 - Configurable via `desysflow.config.yml` (roles, languages, providers, defaults)
 
@@ -130,7 +130,7 @@ Open:
 
 In the UI:
 - Open model settings from the gear icon.
-- Choose `ollama`, `openai`, or `anthropic`.
+- Choose `ollama`, `openai`, `anthropic`, or `groq`.
 - Enter the model name and API key when needed.
 - Click `Check status`.
 - Enter a design prompt, then use follow-up prompts to refine the result.
@@ -141,11 +141,11 @@ In the UI:
   - interactive: `desysflow design` then follow prompts for provider/model/API key
   - non-interactive: `desysflow design --model-provider <provider> --model <name> [--api-key <key>]`
 - UI:
-  - open model settings (gear icon), choose provider/model, add API key for OpenAI/Anthropic
+  - open model settings (gear icon), choose provider/model, add API key for OpenAI/Anthropic/Groq
   - click `Check status` to run live connectivity/auth validation
 
 Provider checks:
-- OpenAI/Anthropic: verifies API key + endpoint reachability (`/models` probe)
+- OpenAI/Anthropic/Groq: verifies API key + endpoint reachability (`/models` probe)
 - Ollama: verifies local endpoint reachability and that selected local model exists (`/api/tags`)
 
 ## Agentic Architecture
