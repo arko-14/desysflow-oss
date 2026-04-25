@@ -663,21 +663,19 @@ def _collect_prompt_text(
             print(f"  Found existing .desysflow baseline ({label}).")
         else:
             print("  No existing .desysflow baseline was found for this repository.")
-            print("  Choose 'vibe-now' to infer from the current directory only.")
-            print("  Choose 'ask' to provide an explicit feature/change request.")
-
-        input_mode = _ask_choice("Input mode", ["vibe-now", "ask"], "vibe-now")
+        print("  Press Enter to continue from the current codebase.")
+        print("  Or add an optional prompt to steer this design run.")
         print("")
-        if input_mode == "ask":
-            print("  Prompt")
-            if has_existing_design:
-                print("  Describe the feature/change request for this codebase.")
-            else:
-                print("  Describe the feature/change request for the current codebase.")
-            entered_prompt = input("  > ").strip()
-            if entered_prompt:
-                prompt_text = entered_prompt
-        return prompt_text, input_mode
+        print("  Optional prompt")
+        if has_existing_design:
+            print("  Add a feature/change request, or leave blank to continue vibe designing from the latest baseline.")
+        else:
+            print("  Add a feature/change request, or leave blank to continue vibe designing from the current codebase.")
+        entered_prompt = input("  > ").strip()
+        if entered_prompt:
+            prompt_text = entered_prompt
+            return prompt_text, "ask"
+        return prompt_text, "vibe-now"
 
     if has_existing_design:
         label = latest_design_version or "latest"

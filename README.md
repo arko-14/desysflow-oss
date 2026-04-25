@@ -110,9 +110,9 @@ desysflow design \
 ```
 
 Interactive defaults:
-- Empty repositories skip the `Input mode` chooser and immediately ask what you want to design.
+- Empty repositories immediately ask what you want to design.
 - Non-empty repositories detect the dominant codebase language and use it as the default language selection.
-- Non-empty repositories without an existing `.desysflow` baseline still offer `vibe-now` or `ask`; `vibe-now` is framed as inference from the current directory only.
+- Non-empty repositories let you add an optional prompt, or press Enter to continue vibe designing from the current codebase or latest baseline.
 - Generated artifacts and local session data are stored in `./.desysflow` by default.
 
 ## UI Usage
