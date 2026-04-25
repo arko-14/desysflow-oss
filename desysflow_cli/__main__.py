@@ -680,6 +680,14 @@ def _collect_prompt_text(
     if has_existing_design:
         label = latest_design_version or "latest"
         print(f"  Found existing .desysflow baseline ({label}).")
+        print("  Press Enter to continue from the latest baseline.")
+        print("  Or add an optional prompt to steer this design run.")
+        print("")
+        print("  Optional prompt")
+        print("  Add a feature/change request, or leave blank to continue vibe designing from the latest baseline.")
+        entered_prompt = input("  > ").strip()
+        if entered_prompt:
+            return entered_prompt, "ask"
         return prompt_text, "vibe-now"
 
     print("  Prompt")

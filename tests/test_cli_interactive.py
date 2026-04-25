@@ -135,6 +135,41 @@ def test_collect_prompt_text_non_empty_repo_keeps_vibe_now_default(monkeypatch) 
     assert prompt == ""
 
 
+def test_collect_prompt_text_baseline_only_allows_optional_prompt(monkeypatch) -> None:
+    responses = iter(["improve reliability and add background jobs"])
+    monkeypatch.setattr("builtins.input", lambda _prompt="": next(responses))
+
+    prompt, mode = _collect_prompt_text(
+        source_has_files=False,
+        has_existing_design=True,
+        latest_design_version="v2",
+        prompt="",
+    )
+
+    assert mode == "ask"
+    assert prompt == "improve reliability and add background jobs"
+
+
+def test_collect_prompt_text_baseline_only_prints_optional_prompt_guidance(
+    monkeypatch,
+    capsys,
+) -> None:
+    responses = iter([""])
+    monkeypatch.setattr("builtins.input", lambda _prompt="": next(responses))
+
+    _collect_prompt_text(
+        source_has_files=False,
+        has_existing_design=True,
+        latest_design_version="v2",
+        prompt="",
+    )
+
+    output = capsys.readouterr().out
+    assert "Found existing .desysflow baseline (v2)." in output
+    assert "Press Enter to continue from the latest baseline." in output
+    assert "Or add an optional prompt to steer this design run." in output
+
+
 def test_collect_prompt_text_repo_without_baseline_keeps_vibe_now_default(monkeypatch) -> None:
     responses = iter([""])
     monkeypatch.setattr("builtins.input", lambda _prompt="": next(responses))
