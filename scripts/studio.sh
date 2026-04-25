@@ -6,10 +6,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR/studio"
 
 ensure_studio_deps() {
-  if [ ! -f "node_modules/vite/dist/node/cli.js" ]; then
-    echo "Studio dependencies are missing or stale. Reinstalling..."
-    npm install
-  fi
+  "$ROOT_DIR/scripts/ensure_studio_deps.sh"
 }
 
 if [ -f "../.env.example" ]; then

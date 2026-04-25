@@ -23,7 +23,7 @@ EOF
 }
 
 ensure_bootstrap() {
-  if [ ! -f ".env.example" ] || [ ! -d ".venv" ] || [ ! -d "studio/node_modules" ] || [ ! -f "studio/node_modules/vite/dist/node/cli.js" ]; then
+  if [ ! -f ".env.example" ] || [ ! -d ".venv" ] || ! ./scripts/ensure_studio_deps.sh --check-only; then
     echo "First-time setup required..."
     ./scripts/bootstrap.sh
   fi
@@ -40,13 +40,18 @@ source_env() {
 normalize_storage_root() {
   local raw="${DESYSFLOW_STORAGE_ROOT:-}"
   if [ -z "$raw" ]; then
-    export DESYSFLOW_STORAGE_ROOT="$INVOKE_CWD/.desysflow"
+    export DESYSFLOW_STORAGE_ROOT="$INVOKE_CWD/desysflow"
     return
   fi
   case "$raw" in
     /*|~*) ;;
     *)
       export DESYSFLOW_STORAGE_ROOT="$INVOKE_CWD/$raw"
+      ;;
+  esac
+  case "$DESYSFLOW_STORAGE_ROOT" in
+    */.desysflow|*/.desflow)
+      export DESYSFLOW_STORAGE_ROOT="${DESYSFLOW_STORAGE_ROOT%/*}/desysflow"
       ;;
   esac
 }

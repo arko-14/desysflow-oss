@@ -15,7 +15,7 @@ from typing import Any
 
 import yaml
 
-from services.storage_paths import get_storage_root
+from services.storage_paths import resolve_storage_root_path, storage_root_candidates
 from services.llm import (
     check_llm_status,
     get_llm_config,
@@ -81,22 +81,9 @@ def default_project_name(source: Path) -> str:
 
 
 def default_output_root(base: Path | None = None) -> Path:
-    """Use a hidden local storage root in the current workspace by default."""
+    """Use a visible local storage root in the current workspace by default."""
     configured = os.getenv("DESYSFLOW_STORAGE_ROOT", "").strip()
-    if configured:
-        configured_path = Path(configured).expanduser()
-        # Backward-compat: transparently migrate legacy ".desflow" root naming.
-        if configured_path.name == ".desflow":
-            return configured_path.with_name(".desysflow")
-        return configured_path
-    root = base or Path.cwd()
-    hidden = root / ".desysflow"
-    legacy_hidden = root / ".desflow"
-    if hidden.exists():
-        return hidden
-    if legacy_hidden.exists():
-        return hidden
-    return hidden
+    return resolve_storage_root_path(configured or None, base=base or Path.cwd())
 
 SKIP_DIRS = {
     ".git",
@@ -733,9 +720,9 @@ def _collect_prompt_text(
     if source_has_files:
         if has_existing_design:
             label = latest_design_version or "latest"
-            print(f"  Found existing .desysflow baseline ({label}).")
+            print(f"  Found existing desysflow baseline ({label}).")
         else:
-            print("  No existing .desysflow baseline was found for this repository.")
+            print("  No existing desysflow baseline was found for this repository.")
         print("  Press Enter to continue from the current codebase.")
         print("  Or add an optional prompt to steer this design run.")
         print("")
@@ -752,7 +739,7 @@ def _collect_prompt_text(
 
     if has_existing_design:
         label = latest_design_version or "latest"
-        print(f"  Found existing .desysflow baseline ({label}).")
+        print(f"  Found existing desysflow baseline ({label}).")
         print("  Press Enter to continue from the latest baseline.")
         print("  Or add an optional prompt to steer this design run.")
         print("")
@@ -812,7 +799,7 @@ def parse_run_args(command: str, argv: list[str] | None = None) -> RunConfig:
     g("--source", default=".", metavar="PATH",
       help="Source repository to analyze (default: .)")
     g("--out", default="", metavar="PATH",
-      help="Output root directory (default: ./.desysflow in the current working directory)")
+      help="Output root directory (default: ./desysflow in the current working directory)")
     g("--project", default="", metavar="NAME",
       help="Project name (default: source directory name)")
 
@@ -998,8 +985,13 @@ def infer_dominant_language(source: Path, allowed_languages: list[str]) -> str:
 
 
 def resolve_latest_design_baseline(output_root: Path, project: str) -> DesignBaseline | None:
-    project_root = output_root / project
-    if not project_root.exists():
+    project_root: Path | None = None
+    for root in storage_root_candidates(output_root):
+        candidate = root / project
+        if candidate.exists():
+            project_root = candidate
+            break
+    if project_root is None:
         return None
 
     latest_version = ""
@@ -1419,7 +1411,14 @@ def choose_version(project_root: Path) -> tuple[str, Path, Path | None]:
 
 
 def cli_db_path(output_root: Path) -> Path:
-    return output_root / ".desysflow_cli.db"
+    target = output_root / "desysflow_cli.db"
+    legacy = output_root / ".desysflow_cli.db"
+    if legacy.exists() and not target.exists():
+        try:
+            legacy.rename(target)
+        except OSError:
+            return legacy
+    return target
 
 
 def read_text_or_empty(path: Path) -> str:
@@ -1519,7 +1518,7 @@ def build_user_request(cfg: RunConfig, ctx: AnalysisContext) -> str:
         )
     if ctx.latest_design:
         base.append(
-            f"Existing .desysflow baseline: version {ctx.latest_design.version} at {ctx.latest_design.path}"
+            f"Existing desysflow baseline: version {ctx.latest_design.version} at {ctx.latest_design.path}"
         )
         baseline_files = ", ".join(ctx.latest_design.files) if ctx.latest_design.files else "no readable baseline docs"
         base.append(f"Baseline files loaded: {baseline_files}")
@@ -1755,8 +1754,8 @@ def render_lld(cfg: RunConfig, ctx: AnalysisContext) -> str:
 - Keep operational behavior explicit: retries, timeouts, observability, and rollback paths.
 
 ## APIs
-- `desysflow /design --source . --out ./.desysflow`
-- `desysflow /design --source . --out ./.desysflow --focus "<goal>"` to refine from latest
+- `desysflow /design --source . --out ./desysflow`
+- `desysflow /design --source . --out ./desysflow --focus "<goal>"` to refine from latest
 - `desysflow /redesign ...` remains as a compatibility alias for explicit refine runs
 
 ## Schemas
@@ -1768,7 +1767,7 @@ def render_lld(cfg: RunConfig, ctx: AnalysisContext) -> str:
 - The reviewer loop consumes draft artifacts and applies small deterministic fixes before packaging.
 
 ## Caching
-- Session runs and event logs are stored in SQLite via `.desysflow_cli.db`.
+- Session runs and event logs are stored in SQLite via `desysflow_cli.db`.
 - No Redis, vector store, or external cache is required for the OSS CLI flow.
 
 ## Error Handling
@@ -1846,7 +1845,7 @@ This versioned design package was generated from repository inspection using an 
 - Refine runs write a fresh versioned package rather than appending fragmented outputs.
 
 ## Session Management and Memory
-- Run history is stored in `.desysflow/.desysflow_cli.db`.
+- Run history is stored in `desysflow/desysflow_cli.db`.
 - No external product-memory layer is required.
 
 ## Web Search Strategy
@@ -1969,7 +1968,7 @@ def render_non_technical_doc(cfg: RunConfig, ctx: AnalysisContext, version: str)
     core_users = ", ".join(["founders", "product leads", "engineering managers", "developers"])
     key_capabilities = [
         "Turns a source tree or prompt into a versioned design package",
-        "Keeps sessions, chat history, and artifacts local under ./.desysflow",
+        "Keeps sessions, chat history, and artifacts local under ./desysflow",
         "Supports iterative refinement without losing earlier versions",
         "Produces outputs usable by both technical and non-technical stakeholders",
     ]
@@ -2918,7 +2917,7 @@ def run_wizard() -> int:
         print(f"  Checkpoint: dominant repository language detected -> {language.title()}")
     if has_existing_design:
         print(
-            "  Checkpoint: existing .desysflow baseline detected"
+            "  Checkpoint: existing desysflow baseline detected"
             f" -> {source_checkpoints.latest_design_version}"
         )
     language = _ask_choice("Language", [item.title() for item in languages], language.title()).lower()

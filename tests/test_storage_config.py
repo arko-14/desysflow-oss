@@ -8,7 +8,7 @@ def test_conversation_store_blank_db_path_uses_default(monkeypatch) -> None:
 
     cfg = get_conversation_store_config()
 
-    assert cfg.db_path.endswith("tmp-storage/.desysflow_chat.db")
+    assert cfg.db_path.endswith("tmp-storage/desysflow_chat.db")
     assert cfg.db_path
 
 
@@ -18,5 +18,5 @@ def test_session_store_blank_db_path_uses_default(monkeypatch) -> None:
 
     cfg = get_session_store_config()
 
-    assert cfg.db_path.endswith("tmp-storage/.desysflow_session.db")
+    assert cfg.db_path.endswith("tmp-storage/desysflow_session.db")
     assert cfg.db_path

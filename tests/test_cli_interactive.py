@@ -76,7 +76,7 @@ def test_collect_source_checkpoints_empty_repo_has_no_inferred_language(tmp_path
 def test_collect_source_checkpoints_detects_latest_desysflow_baseline(tmp_path: Path) -> None:
     source = tmp_path / "repo"
     source.mkdir()
-    output_root = source / ".desysflow"
+    output_root = source / "desysflow"
     latest = output_root / "repo" / "v2"
     latest.mkdir(parents=True)
     (latest / "SUMMARY.md").write_text("# Summary\n\ncurrent design", encoding="utf-8")
@@ -94,7 +94,7 @@ def test_collect_source_checkpoints_detects_latest_desysflow_baseline(tmp_path: 
 
 
 def test_resolve_latest_design_baseline_reads_latest_pointer(tmp_path: Path) -> None:
-    output_root = tmp_path / ".desysflow"
+    output_root = tmp_path / "desysflow"
     latest = output_root / "repo" / "v3"
     latest.mkdir(parents=True)
     (latest / "SUMMARY.md").write_text("# Summary\n\nBaseline summary", encoding="utf-8")
@@ -165,7 +165,7 @@ def test_collect_prompt_text_baseline_only_prints_optional_prompt_guidance(
     )
 
     output = capsys.readouterr().out
-    assert "Found existing .desysflow baseline (v2)." in output
+    assert "Found existing desysflow baseline (v2)." in output
     assert "Press Enter to continue from the latest baseline." in output
     assert "Or add an optional prompt to steer this design run." in output
 
@@ -212,7 +212,7 @@ def test_collect_prompt_text_repo_without_baseline_prints_strict_vibe_now_guidan
     )
 
     output = capsys.readouterr().out
-    assert "No existing .desysflow baseline was found for this repository." in output
+    assert "No existing desysflow baseline was found for this repository." in output
     assert "Press Enter to continue from the current codebase." in output
     assert "Or add an optional prompt to steer this design run." in output
 
@@ -223,5 +223,31 @@ def test_resolve_effective_mode_smart_uses_refine_when_baseline_exists() -> None
     assert mode == "refine"
 
 
-def test_default_output_root_uses_hidden_dir_for_new_workspace(tmp_path: Path) -> None:
-    assert default_output_root(tmp_path) == tmp_path / ".desysflow"
+def test_default_output_root_uses_visible_dir_for_new_workspace(tmp_path: Path) -> None:
+    assert default_output_root(tmp_path) == tmp_path / "desysflow"
+
+
+def test_default_output_root_normalizes_legacy_hidden_env_root(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("DESYSFLOW_STORAGE_ROOT", str(tmp_path / ".desysflow"))
+
+    assert default_output_root(tmp_path) == tmp_path / "desysflow"
+
+
+def test_collect_source_checkpoints_detects_legacy_hidden_baseline(tmp_path: Path) -> None:
+    source = tmp_path / "repo"
+    source.mkdir()
+    output_root = source / ".desysflow"
+    latest = output_root / "repo" / "v4"
+    latest.mkdir(parents=True)
+    (latest / "SUMMARY.md").write_text("# Summary\n\nlegacy design", encoding="utf-8")
+    (output_root / "repo" / "latest").write_text("v4\n", encoding="utf-8")
+
+    checkpoints = collect_source_checkpoints(
+        source,
+        ["python", "typescript", "go", "java", "rust"],
+        output_root=source / "desysflow",
+        project="repo",
+    )
+
+    assert checkpoints.has_existing_design is True
+    assert checkpoints.latest_design_version == "v4"
