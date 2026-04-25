@@ -91,7 +91,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: ui/package-lock.json
+          cache-dependency-path: studio/package-lock.json
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
@@ -123,12 +123,16 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: ui/package-lock.json
+          cache-dependency-path: studio/package-lock.json
 
-      - name: Install UI dependencies
-        working-directory: ui
+      - name: Install Studio dependencies
+        working-directory: studio
         run: npm ci
 
-      - name: Build UI
-        working-directory: ui
+      - name: Run Studio tests
+        working-directory: studio
+        run: npm test
+
+      - name: Build Studio
+        working-directory: studio
         run: npm run build
