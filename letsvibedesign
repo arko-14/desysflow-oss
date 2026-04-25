@@ -23,7 +23,7 @@ EOF
 }
 
 ensure_bootstrap() {
-  if [ ! -f ".env.example" ] || [ ! -d ".venv" ] || [ ! -d "studio/node_modules" ]; then
+  if [ ! -f ".env.example" ] || [ ! -d ".venv" ] || [ ! -d "studio/node_modules" ] || [ ! -f "studio/node_modules/vite/dist/node/cli.js" ]; then
     echo "First-time setup required..."
     ./scripts/bootstrap.sh
   fi
