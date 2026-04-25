@@ -21,7 +21,7 @@ trap cleanup EXIT INT TERM
 ./scripts/api.sh &
 API_PID=$!
 
-./scripts/ui.sh &
+./scripts/studio.sh &
 UI_PID=$!
 
 echo "DesysFlow Studio started."

@@ -34,9 +34,9 @@ uv venv --python "$bootstrap_python"
 uv pip install -r requirements.txt
 uv pip install -e .
 
-echo "Installing UI packages..."
+echo "Installing Studio packages..."
 (
-  cd ui
+  cd studio
   npm install
 )
 

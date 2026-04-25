@@ -1318,7 +1318,7 @@ def source_inventory(source: Path) -> dict[str, Any]:
     files_sorted = sorted(files, key=lambda item: (len(item.parts), str(item)))
     top_files = [str(item) for item in files_sorted[:TOP_FILE_LIMIT]]
     modules = []
-    for name in ["agents", "api", "services", "utils", "ui", "schemas", "graph", "rules"]:
+    for name in ["agents", "api", "services", "utils", "studio", "schemas", "graph", "rules"]:
         path = source / name
         if path.exists() and path.is_dir():
             modules.append({"name": name, "files": sum(1 for item in path.rglob("*") if item.is_file())})
@@ -1342,7 +1342,7 @@ def detect_stack(source: Path) -> dict[str, Any]:
 
     if (source / "pyproject.toml").exists() or (source / "requirements.txt").exists():
         stack["language"].append("Python")
-    if (source / "ui" / "package.json").exists():
+    if (source / "studio" / "package.json").exists():
         stack["language"].append("JavaScript")
 
     for key, label in [
@@ -1374,10 +1374,10 @@ def detect_stack(source: Path) -> dict[str, Any]:
 def map_modules(source: Path) -> dict[str, str]:
     descriptions = {
         "agents": "Domain agents responsible for extraction, architecture drafting, diagram shaping, and revision passes.",
-        "api": "Local FastAPI surface used by the simple OSS UI.",
+        "api": "Local FastAPI surface used by the Studio frontend.",
         "services": "Runtime adapters for search, LLM configuration, storage, and session handling.",
         "utils": "Formatting, memory compaction, diagram stability, and document helpers.",
-        "ui": "Local browser UI for prompt entry and inspecting generated outputs.",
+        "studio": "Local Studio frontend for prompt entry and inspecting generated outputs.",
         "schemas": "Pydantic request and response schemas for API contracts.",
         "graph": "Workflow orchestration layer coordinating agent execution.",
         "rules": "Prompt rules and edge-case handling logic.",
@@ -1397,7 +1397,7 @@ def identify_key_paths(source: Path) -> list[str]:
         "README.md",
         "docs/cli.md",
         "api/routes.py",
-        "ui/src/App.jsx",
+        "studio/src/App.jsx",
         "desysflow_cli/__main__.py",
     ]
     return [item for item in candidates if (source / item).exists()]
@@ -1488,8 +1488,8 @@ def build_mermaid(ctx: AnalysisContext, cfg: RunConfig) -> str:
 
     if "api" in modules:
         lines.append("    DesignOrchestrator --> LocalApi[Local API Layer]")
-    if "ui" in modules:
-        lines.append("    DesysflowCli --> WorkspaceUi[Local Workspace UI]")
+    if "studio" in modules:
+        lines.append("    DesysflowCli --> WorkspaceStudio[Local Studio Frontend]")
     if "services" in modules:
         lines.append("    DesignOrchestrator --> ServiceAdapters[Service Adapters]")
     if cfg.cloud != "local":

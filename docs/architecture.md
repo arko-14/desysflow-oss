@@ -50,7 +50,7 @@ For the agent-by-agent view, see [Agentic Architecture](agentic-architecture.md)
 - `schemas/`: API contracts
 - `graph/`: base orchestration graph
 - `utils/`: parser, formatting, memory helpers
-- `ui/`: frontend app
+- `studio/`: frontend app
 
 ## Data Storage
 
